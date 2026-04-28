@@ -65,6 +65,20 @@ cp -r Android-Verify-Skill ~/.claude/skills/android-verify
 
 Copy `SKILL.md` and the `references/` directory to your agent's skills directory.
 
+### Recommended: Add a CLAUDE.md instruction
+
+Claude Code won't always invoke this skill automatically after implementing a feature or fix. To
+ensure consistent verification, add the following to your project's `CLAUDE.md`:
+
+```
+After completing any Android UI implementation (features, fixes, or changes that affect what the
+user sees or interacts with), run /android-verify before reporting the task as done — as long as
+the change can be verified through the android CLI on a connected device or emulator.
+```
+
+This makes verification a natural part of the agent's workflow rather than something you have to
+remember to ask for.
+
 ### Documentation
 
 - [SKILL.md](SKILL.md) — Full skill specification
