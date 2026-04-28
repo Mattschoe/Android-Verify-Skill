@@ -60,9 +60,9 @@ keyevent goes through `adb shell input`.
 |---|---|
 | `android layout` | Full JSON of every UI element on screen. Use `center` for tap targets. |
 | `android layout --diff` | Only elements that changed since the last `layout` call. Use after every action. |
-| `android screen capture -o <path>` | Screenshot to PNG. |
-| `android screen capture --annotate -o <path>` | Screenshot with numbered bounding boxes around every element. |
-| `android screen resolve --screenshot <png> --string "tap #<n>"` | Convert an annotated label number from the previous command into `tap x y` coordinates. Only useful with `--annotate` output. |
+| `android screen capture -o <path>` | Screenshot to PNG. **Always pass `-o`** — without it the CLI writes to `./screenshot.png` and clobbers prior screenshots. Use a per-step path like `/tmp/verify-<step>.png`. |
+| `android screen capture --annotate -o <path>` | Screenshot with numbered bounding boxes around every element. Same `-o` rule applies. |
+| `android screen resolve --screenshot <png> --string "tap #<n>"` | **Requires a prior `--annotate` screenshot.** Converts a label like `#6` from that screenshot into `tap x y` coordinates. |
 
 ### Act (`adb shell input`)
 
@@ -100,9 +100,12 @@ android screen capture -o /tmp/baseline.png
 
 ### Phase 2: Execute journey
 
-Either receive a journey XML file, or auto-generate one from the feature you
-just implemented. See [journey format](references/journey-format.md) for the
-XML spec and auto-generation guidance.
+**Source priority:** if the user provides a journey XML file (in the prompt,
+attached, or referenced by path), use it verbatim. Only auto-generate a
+journey from your implementation context when no journey is supplied. Never
+silently substitute your own actions for a user-provided journey. See
+[journey format](references/journey-format.md) for the XML spec and
+auto-generation guidance.
 
 For each `<action>` in the journey:
 
@@ -116,7 +119,9 @@ inspect → act → verify cycle.
 
 ### Phase 3: Report
 
-Output a JSON summary:
+Output the result as the JSON object below — not a markdown table, not prose.
+The structure is part of the skill's contract so downstream tooling and the
+developer reviewing the run can parse results consistently.
 
 ```json
 {
@@ -196,12 +201,17 @@ full spec.
    poll `android layout --diff`. If it returns empty, wait 2 seconds and retry
    up to 3 times. This adapts to fast and slow transitions; a fixed `sleep N &&
    android screen capture` is fragile and should not be the default.
-2. **Focus before typing** — text fields must have `"focused"` in their `state`
+2. **Confirm screen identity before acting on it** — after navigation or app
+   launch, run a full `android layout` (not `--diff`) and verify the expected
+   screen markers (title, key element, content-desc) are present before
+   issuing the next action. Initial layouts can be partially loaded; if
+   markers are missing, wait 2 seconds and retry up to 3 times.
+3. **Focus before typing** — text fields must have `"focused"` in their `state`
    before using `adb shell input text`.
-3. **Scroll slowly** — use 500ms+ duration on `adb shell input swipe`. Fast
+4. **Scroll slowly** — use 500ms+ duration on `adb shell input swipe`. Fast
    swipes overshoot.
-4. **Encode spaces** — use `%s` for spaces in `adb shell input text`.
-5. **Tap by coordinate** — read `center` from `android layout` and pass it to
+5. **Encode spaces** — use `%s` for spaces in `adb shell input text`.
+6. **Tap by coordinate** — read `center` from `android layout` and pass it to
    `adb shell input tap`. There is no semantic `tap --text` or `tap --key`.
 
 See [interaction loop](references/interaction-loop.md) for the full reference.
