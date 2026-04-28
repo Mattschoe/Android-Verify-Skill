@@ -48,6 +48,41 @@ Before verification, confirm:
 2. **App installed and running**: the app under test is deployed and launched
 3. **`android` CLI available**: `android --help` succeeds
 
+## Command reference
+
+Two CLIs are involved: `android` for inspection and screenshots, `adb` for
+interaction. **There is no `android tap`** — every tap, swipe, type, and
+keyevent goes through `adb shell input`.
+
+### Inspect (`android`)
+
+| Command | Purpose |
+|---|---|
+| `android layout` | Full JSON of every UI element on screen. Use `center` for tap targets. |
+| `android layout --diff` | Only elements that changed since the last `layout` call. Use after every action. |
+| `android screen capture -o <path>` | Screenshot to PNG. |
+| `android screen capture --annotate -o <path>` | Screenshot with numbered bounding boxes around every element. |
+| `android screen resolve --screenshot <png> --string "tap #<n>"` | Convert an annotated label number from the previous command into `tap x y` coordinates. Only useful with `--annotate` output. |
+
+### Act (`adb shell input`)
+
+| Command | Purpose |
+|---|---|
+| `adb shell input tap <x> <y>` | Tap at coordinates (use `center` from `android layout`). |
+| `adb shell input text "hello%sworld"` | Type into the focused field. `%s` = space. |
+| `adb shell input swipe <x1> <y1> <x2> <y2> <duration_ms>` | Swipe or scroll. Use 500ms+ for scrolling. |
+| `adb shell input keyevent KEYCODE_BACK` | Hardware back button. |
+| `adb shell input keyevent KEYCODE_ENTER` | Submit / newline. |
+| `adb shell input keyevent KEYCODE_HOME` | Home button. |
+
+### Diagnose (`adb`)
+
+| Command | Purpose |
+|---|---|
+| `adb devices` | List connected devices/emulators. |
+| `adb shell pidof <package>` | Crash check — empty output means the process died. |
+| `adb logcat -d --pid=<pid> \| tail -50` | Recent log lines after a crash. |
+
 ## Workflow
 
 ### Phase 1: Pre-flight
@@ -127,6 +162,12 @@ when layout can't provide what you need.
 `screen capture` for keyboard verification. See
 [layout vs screenshot](references/layout-vs-screenshot.md) for details.
 
+**`screen resolve` is a follow-up to `--annotate`, not a third inspection
+mode.** Once `screen capture --annotate` has labelled elements with numbers
+in a PNG, `screen resolve` converts a label like `#6` into `tap x y`
+coordinates. If you're already getting coordinates from `android layout`,
+you don't need it.
+
 ## Auto-generating journeys
 
 After implementing a feature, generate a journey from your knowledge of what
@@ -151,14 +192,17 @@ full spec.
 
 ## Interaction rules
 
-1. **Focus before typing** — text fields must have `"focused"` in their `state`
-   before using `adb shell input text`
-2. **Scroll slowly** — use 500ms+ duration on `adb shell input swipe`
-3. **Use `layout --diff`** — after actions, check only what changed to keep
-   context small
-4. **Retry on empty diff** — if `layout --diff` returns nothing after an action,
-   wait 2 seconds and retry up to 3 times
-5. **Encode spaces** — use `%s` for spaces in `adb shell input text`
+1. **Wait for idle with `layout --diff`, not `sleep`** — after every action,
+   poll `android layout --diff`. If it returns empty, wait 2 seconds and retry
+   up to 3 times. This adapts to fast and slow transitions; a fixed `sleep N &&
+   android screen capture` is fragile and should not be the default.
+2. **Focus before typing** — text fields must have `"focused"` in their `state`
+   before using `adb shell input text`.
+3. **Scroll slowly** — use 500ms+ duration on `adb shell input swipe`. Fast
+   swipes overshoot.
+4. **Encode spaces** — use `%s` for spaces in `adb shell input text`.
+5. **Tap by coordinate** — read `center` from `android layout` and pass it to
+   `adb shell input tap`. There is no semantic `tap --text` or `tap --key`.
 
 See [interaction loop](references/interaction-loop.md) for the full reference.
 
